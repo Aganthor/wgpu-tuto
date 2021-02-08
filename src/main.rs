@@ -6,7 +6,6 @@ use winit::{
 
 struct State {
     surface: wgpu::Surface,
-    adapter: wgpu::Adapter,
     device: wgpu::Device,
     queue: wgpu::Queue,
     sc_desc: wgpu::SwapChainDescriptor,
@@ -21,20 +20,6 @@ impl State {
 
         let surface = wgpu::Surface::create(window);
         
-        let adapter = wgpu::Adapter::request(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                compatible_surface: Some(&surface),
-            },
-            wgpu::BackendBit::PRIMARY,
-        ).await.unwrap();
-
-        let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
-            },
-            limits: Default::default(),
-        }).await;
     }
 
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -49,7 +34,7 @@ impl State {
         unimplemented!()
     }
 
-    fn render(&mut self) {
+    fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
         unimplemented!()
     }
 }
