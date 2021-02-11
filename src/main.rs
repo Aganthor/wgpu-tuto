@@ -1,5 +1,8 @@
-use std::mem::swap;
+use std::iter;
+
 use futures::executor::block_on;
+
+use image::buffer::ConvertBuffer;
 use winit::{
     event::*,
     event_loop::{EventLoop, ControlFlow},
@@ -13,6 +16,7 @@ struct State {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
+    clear_color: (f64, f64, f64),
 }
 
 impl State {
@@ -53,6 +57,7 @@ impl State {
             sc_desc,
             swap_chain,
             size,
+            clear_color : (0.1, 0.2, 0.3),
         }
         
     }
@@ -65,18 +70,56 @@ impl State {
     }
     
     fn input(&mut self, event: &WindowEvent) -> bool {
-        false
+        match event {
+            WindowEvent::CursorMoved { position, .. } => {
+                println!("Current clear color = {}", self.clear_color.0);
+                self.clear_color.0 = position.x as f64 / self.size.width as f64;
+                self.clear_color.1 = position.y as f64 / self.size.height as f64;
+
+                true
+            }        
+            _ => false,
+        }
     }
     
     fn update(&mut self) {
-        todo!()
     }
     
     fn render(&mut self) -> Result<(), wgpu::SwapChainError> {
+        // Get the current frame to use.
         let frame = self
-            .swap_chain
-            .get_current_frame()?
-            .output;
+        .swap_chain
+        .get_current_frame()?
+        .output;
+        
+        let mut encoder = self.device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Render Encoder"),
+        });
+        
+        {
+            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[
+                wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: self.clear_color.0,
+                            g: self.clear_color.1,
+                            b: self.clear_color.2,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    }
+                }
+                ],
+                depth_stencil_attachment: None,
+            });
+        }
+        
+        // submit will accept anything that implements IntoIter
+        self.queue.submit(std::iter::once(encoder.finish()));
+        
         Ok(())
     }
 }
@@ -91,10 +134,30 @@ fn main() {
     
     event_loop.run(move |event, _, control_flow| {
         match event {
+            Event::RedrawRequested(_) => {
+                state.update();
+                match state.render() {
+                    Ok(_) => {}
+                    // Recreate the swap_chain if lost.
+                    Err(wgpu::SwapChainError::Lost) => state.resize(state.size),
+                    // The system is out of memory, we should probably quit
+                    Err(wgpu::SwapChainError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                    // All other errors (Outdated, Timeout) should be resolved by the next frame
+                    Err(e) => eprintln!("{:?}", e),
+                }
+            }
+            
+            Event::MainEventsCleared => {
+                // RedrawRequested will only trigger once, unless we manually
+                // request it.
+                window.request_redraw();
+            }
+            
             Event::WindowEvent {
                 ref event,
                 window_id,
-            } if window_id == window.id() => if !state.input(event) {
+            } if window_id == window.id() => 
+            if !state.input(event) {
                 match event {
                     WindowEvent::Resized(physical_size) => {
                         state.resize(*physical_size);
@@ -123,8 +186,7 @@ fn main() {
                     _ => {}
                 }
             }
-                _ => {}
-            }
-        });
-    }
-    
+            _ => {}
+        }
+    });
+}
