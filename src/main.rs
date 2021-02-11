@@ -72,7 +72,6 @@ impl State {
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
-                println!("Current clear color = {}", self.clear_color.0);
                 self.clear_color.0 = position.x as f64 / self.size.width as f64;
                 self.clear_color.1 = position.y as f64 / self.size.height as f64;
 
