@@ -16,8 +16,6 @@ struct State {
     sc_desc: wgpu::SwapChainDescriptor,
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
-    clear_color: (f64, f64, f64),
-
     render_pipeline: wgpu::RenderPipeline,
 }
 
@@ -53,33 +51,8 @@ impl State {
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
         // Render pipeline
-        let vs_src = include_str!("shader.vert");
-        let fs_src = include_str!("shader.frag");
-        let mut compiler = shaderc::Compiler::new().unwrap();
-        let vs_spirv = compiler.compile_into_spirv(
-            vs_src,
-            shaderc::ShaderKind::Vertex,
-            "shader.vert",
-            "main",
-            None).unwrap();
-        let fs_spirv = compiler.compile_into_spirv(
-            fs_src,
-            shaderc::ShaderKind::Fragment,
-            "shader.frag",
-            "main",
-            None).unwrap();
-        let vs_data = wgpu::util::make_spirv(vs_spirv.as_binary_u8());
-        let fs_data = wgpu::util::make_spirv(fs_spirv.as_binary_u8());
-        let vs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Vertex Shader"),
-            source: vs_data,
-            flags: wgpu::ShaderFlags::default(),
-        });
-        let fs_module = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
-            label: Some("Fragment Shader"),
-            source: fs_data,
-            flags: wgpu::ShaderFlags::default(),
-        });
+        let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
+        let fs_module = device.create_shader_module(&wgpu::include_spirv!("shader.frag.spv"));
 
         let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
@@ -127,7 +100,6 @@ impl State {
             sc_desc,
             swap_chain,
             size,
-            clear_color : (0.1, 0.2, 0.3),
             render_pipeline
         }
 
@@ -141,15 +113,7 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                self.clear_color.0 = position.x as f64 / self.size.width as f64;
-                self.clear_color.1 = position.y as f64 / self.size.height as f64;
-
-                true
-            }
-            _ => false,
-        }
+        false
     }
 
     fn update(&mut self) {
@@ -175,9 +139,9 @@ impl State {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: self.clear_color.0,
-                            g: self.clear_color.1,
-                            b: self.clear_color.2,
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
                             a: 1.0,
                         }),
                         store: true,
