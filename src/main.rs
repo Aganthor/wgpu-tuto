@@ -1,13 +1,29 @@
 use std::iter;
-
 use futures::executor::block_on;
-
 use image::buffer::ConvertBuffer;
+use wgpu::util::DeviceExt;
 use winit::{
     event::*,
     event_loop::{EventLoop, ControlFlow},
     window::{Window, WindowBuilder},
 };
+use bytemuck;
+
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+//main.rs
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
+
 
 struct State {
     surface: wgpu::Surface,
@@ -17,6 +33,7 @@ struct State {
     swap_chain: wgpu::SwapChain,
     size: winit::dpi::PhysicalSize<u32>,
     render_pipeline: wgpu::RenderPipeline,
+    vertex_buffer: wgpu::Buffer,
 }
 
 impl State {
@@ -93,6 +110,14 @@ impl State {
             },
         });
 
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(VERTICES),
+                usage: wgpu::BufferUsage::VERTEX,
+            }
+        );
+
         Self {
             surface,
             device,
@@ -100,7 +125,8 @@ impl State {
             sc_desc,
             swap_chain,
             size,
-            render_pipeline
+            render_pipeline,
+            vertex_buffer,
         }
 
     }
