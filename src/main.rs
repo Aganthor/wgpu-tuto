@@ -1,6 +1,6 @@
 use std::iter;
 use futures::executor::block_on;
-use image::buffer::ConvertBuffer;
+use image::{GenericImageView, buffer::ConvertBuffer};
 use wgpu::util::DeviceExt;
 use winit::{
     event::*,
@@ -38,7 +38,6 @@ impl Vertex {
     }
 }
 
-// main.rs
 const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
     Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
@@ -52,8 +51,6 @@ const INDICES: &[u16] = &[
     1, 2, 4,
     2, 3, 4,
 ];
-
-
 
 struct State {
     surface: wgpu::Surface,
@@ -81,6 +78,7 @@ impl State {
             },
         ).await.unwrap();
 
+        // Create the device and queue
         let (device, queue) = adapter.request_device(
             &wgpu::DeviceDescriptor {
                 features: wgpu::Features::empty(),
@@ -90,6 +88,7 @@ impl State {
             None,
         ).await.unwrap();
 
+        // Create the swapchain
         let sc_desc = wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::RENDER_ATTACHMENT,
             format: adapter.get_swap_chain_preferred_format(&surface),
@@ -98,6 +97,14 @@ impl State {
             present_mode: wgpu::PresentMode::Fifo,
         };
         let swap_chain = device.create_swap_chain(&surface, &sc_desc);
+
+        // Load the image.
+        let diffuse_bytes = include_bytes!("happy-tree.png");
+        let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+        let diffuse_rgba = diffuse_image.as_bgra8().unwrap();
+
+        use image::GenericImageView;
+        let dimensions = diffuse_image.dimensions();
 
         // Render pipeline
         let vs_module = device.create_shader_module(&wgpu::include_spirv!("shader.vert.spv"));
