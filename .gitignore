@@ -2,5 +2,4 @@
 **/*.rs.bk
 .idea
 Cargo.lock
-Cargo.lock
-Cargo.lock
+.DS_Store
