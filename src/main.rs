@@ -11,7 +11,9 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
-    color_modifier: f64,
+    render_pipeline: wgpu::RenderPipeline,
+    challenge_render_pipeline: wgpu::RenderPipeline,
+    use_color: bool,
 }
 
 impl State {
@@ -48,13 +50,104 @@ impl State {
         };
         surface.configure(&device, &config);
 
+        let shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+
+        let challenge_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("challenge_shader.wgsl").into()),
+        });        
+
+        let render_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Render Pipeline Layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
+        // Challenge pipeline
+        let challenge_render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &challenge_shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &challenge_shader,
+                entry_point: "fs_main",
+                targets: &[wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                }],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
+        let use_color = true;
+
         Self {
             surface,
             device,
             queue,
             config,
             size,
-            color_modifier: 0.0,
+            render_pipeline,
+            challenge_render_pipeline,
+            use_color,
         }
     }
 
@@ -69,16 +162,19 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved { device_id, position, modifiers } => {
-                self.color_modifier = position.x as f64 / self.size.width as f64;
-
-                return true;
+            WindowEvent::KeyboardInput { 
+                input: KeyboardInput {
+                    state,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.use_color = *state == ElementState::Released;
+                true
             }
-
-            _ => {}
+            _ => false,
         }
-
-        false
     }
 
     fn update(&mut self) {
@@ -93,15 +189,15 @@ impl State {
         });
 
         {
-            let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
                 color_attachments: &[wgpu::RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations { 
                         load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: self.color_modifier,
-                            g: self.color_modifier,
+                            r: 0.1,
+                            g: 0.2,
                             b: 0.3,
                             a: 1.0,
                         }),
@@ -110,7 +206,15 @@ impl State {
                 }],
                 depth_stencil_attachment: None,
             });
+            if self.use_color {
+                render_pass.set_pipeline(&self.render_pipeline);
+            } else {
+                render_pass.set_pipeline(&self.challenge_render_pipeline);
+            }
+            render_pass.draw(0..3, 0..1);
         }
+
+
 
         // Submit will accept anything that implements IntoIter
         self.queue.submit(std::iter::once(encoder.finish()));
