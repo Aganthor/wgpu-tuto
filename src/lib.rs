@@ -45,6 +45,23 @@ const INDICES: &[u16] = &[
     0, 2, 3,
 ];
 
+const CHALLENGE_VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },//A-0
+    Vertex { position: [-0.5, 0.0, 0.0], color: [0.0, 1.0, 0.0] },//B-1
+    Vertex { position: [0.0, 0.0, 0.0], color: [0.0, 0.0, 1.0] },//C-2
+    Vertex { position: [0.0, -0.5, 0.0], color: [0.4, 0.4, 0.0] },//D-3
+    Vertex { position: [0.5, -0.5, 0.0], color: [1.0, 0.5, 0.0] },//E-4
+    Vertex { position: [-0.5, -0.5, 0.0], color: [1.0, 0.0, 0.9] },//F-5
+    Vertex { position: [0.5, 0.0, 0.0], color: [1.0, 0.2, 0.3] },//G-6
+];
+
+const CHALLENGE_INDICES: &[u16] = &[
+    0, 1, 2, //ABC
+    2, 5, 3, //CFD
+    2, 3, 4, //CDE
+    0, 2, 6, //ACG
+];
+
 struct State {
     surface: wgpu::Surface,
     device: wgpu::Device,
@@ -55,6 +72,11 @@ struct State {
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_vertices: u32,
+
+    challenge_vertex_buffer: wgpu::Buffer,
+    challenge_index_buffer: wgpu::Buffer,
+    challenge_num_vertices: u32,
+    use_challenge_shape: bool,
 }
 
 impl State {
@@ -155,7 +177,26 @@ impl State {
             }
         );
 
+        let challenge_vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(CHALLENGE_VERTICES),
+                usage: wgpu::BufferUsages::VERTEX,
+            }
+        );
+
+        let challenge_index_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Index Buffer"),
+                contents: bytemuck::cast_slice(CHALLENGE_INDICES),
+                usage: wgpu::BufferUsages::INDEX,
+            }
+        );        
+
         let num_vertices = INDICES.len() as u32;
+        let challenge_num_vertices = CHALLENGE_INDICES.len() as u32;
+
+        let use_challenge_shape = false;
 
         Self {
             surface,
@@ -167,6 +208,11 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_vertices,
+            // Challenge part.
+            challenge_vertex_buffer,
+            challenge_index_buffer,
+            challenge_num_vertices,
+            use_challenge_shape,
         }
     }
 
@@ -181,6 +227,17 @@ impl State {
 
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
+            WindowEvent::KeyboardInput { 
+                input: KeyboardInput {
+                    state,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                ..
+            } => {
+                self.use_challenge_shape = *state == ElementState::Released;
+                true
+            }
             _ => false,
         }
     }
@@ -216,10 +273,15 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_vertices, 0, 0..1);
-            //render_pass.draw(0..self.num_vertices, 0..1);
+            if self.use_challenge_shape {
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_vertices, 0, 0..1);
+            } else {
+                render_pass.set_vertex_buffer(0, self.challenge_vertex_buffer.slice(..));
+                render_pass.set_index_buffer(self.challenge_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.challenge_num_vertices, 0, 0..1);
+            }
         }
 
         // Submit will accept anything that implements IntoIter
