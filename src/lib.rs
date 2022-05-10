@@ -65,6 +65,11 @@ struct State {
     num_indices: u32,
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
+
+    // Challenge part.
+    challenge_diffuse_bind_group: wgpu::BindGroup,
+    challenge_diffuse_texture: texture::Texture,
+    use_challenge_texture: bool, 
 }
 
 impl State {
@@ -100,8 +105,13 @@ impl State {
             present_mode: wgpu::PresentMode::Fifo,
         };
         surface.configure(&device, &config);
+
         let diffuse_bytes = include_bytes!("happy-tree.png");
         let diffuse_texture = texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
+
+        let challenge_diffuse_bytes = include_bytes!("Predator_1.png");
+        let challenge_diffuse_texture = texture::Texture::from_bytes(&device, &queue, challenge_diffuse_bytes, "Predator_1.png").unwrap();
+
 
         let texture_bind_group_layout = device.create_bind_group_layout(
             &wgpu::BindGroupLayoutDescriptor {
@@ -143,6 +153,23 @@ impl State {
                     },
                 ],
                 label: Some("diffuse_bind_group"),
+            }
+        );
+
+        let challenge_diffuse_bind_group = device.create_bind_group(
+            &wgpu::BindGroupDescriptor {
+                layout: &texture_bind_group_layout,
+                entries: & [
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&challenge_diffuse_texture.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&challenge_diffuse_texture.sampler),
+                    },
+                ],
+                label: Some("challenge_diffuse_bind_group"),
             }
         );
 
@@ -212,6 +239,8 @@ impl State {
 
         let num_indices = INDICES.len() as u32;
 
+        let use_challenge_texture = false;
+
         Self {
             surface,
             device,
@@ -224,6 +253,10 @@ impl State {
             num_indices,
             diffuse_bind_group,
             diffuse_texture,
+            // Challenge
+            challenge_diffuse_bind_group,
+            challenge_diffuse_texture,
+            use_challenge_texture,
         }
     }
 
@@ -246,6 +279,8 @@ impl State {
                     },
                 ..
             } => {
+                self.use_challenge_texture = *state == ElementState::Released;
+                println!("Use challenge texture {}", self.use_challenge_texture);
                 true
             }
             _ => false,
@@ -283,7 +318,12 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            if self.use_challenge_texture {
+                render_pass.set_bind_group(0, &self.challenge_diffuse_bind_group, &[]);
+            } else {
+                render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            }
+            
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
